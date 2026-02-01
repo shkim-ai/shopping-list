@@ -218,11 +218,108 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
-        let items = JSON.parse(localStorage.getItem('shoppingList')) || [];
+        // Supabase 설정
+        const SUPABASE_URL = 'https://ymwqesspxmnhcglfhlnb.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inltd3Flc3NweG1uaGNnbGZobG5iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk5MzEzMTMsImV4cCI6MjA4NTUwNzMxM30.ctQLVllb9iizf8b5OCJByzyB03tS54FO_bXaJPHqfUw';
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        function saveItems() {
-            localStorage.setItem('shoppingList', JSON.stringify(items));
+        let items = [];
+
+        // 데이터베이스에서 아이템 로드
+        async function loadItems() {
+            const { data, error } = await supabase
+                .from('shopping_items')
+                .select('*')
+                .order('created_at', { ascending: true });
+
+            if (error) {
+                console.error('Error loading items:', error);
+                return;
+            }
+            items = data || [];
+            renderList();
+        }
+
+        // 아이템 추가
+        async function addItem() {
+            const input = document.getElementById('itemInput');
+            const text = input.value.trim();
+
+            if (text === '') return;
+
+            const { data, error } = await supabase
+                .from('shopping_items')
+                .insert([{ text, checked: false }])
+                .select();
+
+            if (error) {
+                console.error('Error adding item:', error);
+                return;
+            }
+
+            items.push(data[0]);
+            renderList();
+            input.value = '';
+            input.focus();
+        }
+
+        // 아이템 체크 토글
+        async function toggleItem(index) {
+            const item = items[index];
+            const newChecked = !item.checked;
+
+            const { error } = await supabase
+                .from('shopping_items')
+                .update({ checked: newChecked })
+                .eq('id', item.id);
+
+            if (error) {
+                console.error('Error updating item:', error);
+                return;
+            }
+
+            items[index].checked = newChecked;
+            renderList();
+        }
+
+        // 아이템 삭제
+        async function deleteItem(index) {
+            const item = items[index];
+
+            const { error } = await supabase
+                .from('shopping_items')
+                .delete()
+                .eq('id', item.id);
+
+            if (error) {
+                console.error('Error deleting item:', error);
+                return;
+            }
+
+            items.splice(index, 1);
+            renderList();
+        }
+
+        // 완료된 아이템 모두 삭제
+        async function clearCompleted() {
+            const completedIds = items.filter(item => item.checked).map(item => item.id);
+
+            if (completedIds.length === 0) return;
+
+            const { error } = await supabase
+                .from('shopping_items')
+                .delete()
+                .in('id', completedIds);
+
+            if (error) {
+                console.error('Error clearing completed:', error);
+                return;
+            }
+
+            items = items.filter(item => !item.checked);
+            renderList();
         }
 
         function renderList() {
@@ -255,37 +352,6 @@
             return div.innerHTML;
         }
 
-        function addItem() {
-            const input = document.getElementById('itemInput');
-            const text = input.value.trim();
-
-            if (text === '') return;
-
-            items.push({ text, checked: false });
-            saveItems();
-            renderList();
-            input.value = '';
-            input.focus();
-        }
-
-        function toggleItem(index) {
-            items[index].checked = !items[index].checked;
-            saveItems();
-            renderList();
-        }
-
-        function deleteItem(index) {
-            items.splice(index, 1);
-            saveItems();
-            renderList();
-        }
-
-        function clearCompleted() {
-            items = items.filter(item => !item.checked);
-            saveItems();
-            renderList();
-        }
-
         // 이벤트 리스너 등록
         document.getElementById('itemInput').addEventListener('keydown', (event) => {
             if (event.key === 'Enter') {
@@ -310,8 +376,8 @@
             }
         });
 
-        // 초기 렌더링
-        renderList();
+        // 초기 로드
+        loadItems();
     </script>
 </body>
 </html>
